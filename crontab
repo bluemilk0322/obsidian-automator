@@ -1,0 +1,3 @@
+# Obsidian Automator — run daily at 09:00 Asia/Taipei
+0 9 * * * /app/scripts/entrypoint.sh >> /var/log/cron.log 2>&1
+# Empty line required by cron

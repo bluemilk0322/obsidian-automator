@@ -1,0 +1,18 @@
+services:
+  automator:
+    build: .
+    container_name: obsidian-automator
+    restart: unless-stopped
+    volumes:
+      # Obsidian vault (WSL-mounted Windows drive E:\Obsidian) — read/write
+      - /mnt/e/Obsidian:/vault
+      # Google OAuth credentials — read-only after initial auth
+      - ./credentials:/credentials
+      # Claude Code auth — read-only
+      - ~/.claude:/root/.claude:ro
+    environment:
+      - TZ=Asia/Taipei
+      - VAULT_PATH=/vault
+      - CREDENTIALS_DIR=/credentials
+    env_file:
+      - .env
