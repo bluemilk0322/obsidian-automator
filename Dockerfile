@@ -25,7 +25,7 @@ COPY scripts/ /app/scripts/
 COPY crontab /etc/cron.d/obsidian-automator
 
 # Set permissions
-RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/weather.sh \
+RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/weather.sh /app/scripts/docker-entrypoint.sh \
     && chmod 0644 /etc/cron.d/obsidian-automator \
     && crontab /etc/cron.d/obsidian-automator \
     && touch /var/log/cron.log
@@ -34,5 +34,5 @@ RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/weather.sh \
 ENV PATH="/opt/venv/bin:$PATH"
 ENV CREDENTIALS_DIR=/credentials
 
-# Run cron in foreground
-CMD ["cron", "-f"]
+# Snapshot env to /app/.env (so cron-spawned shells can source it), then run cron
+CMD ["/app/scripts/docker-entrypoint.sh"]
