@@ -123,20 +123,25 @@ def fetch_emails(account_name: str) -> list[dict]:
                     category = lid.replace("CATEGORY_", "").lower()
                     break
 
-            emails.append({
+            # In first-run mode keep the per-email JSON tiny — 338+ emails
+            # otherwise blow Claude's context window. The snippet alone is
+            # usually enough to classify; body/thread_id/to/labels are dropped.
+            entry = {
                 "id": msg["id"],
-                "thread_id": msg.get("threadId", ""),
                 "account": account_name,
                 "from": get_header(headers, "From"),
-                "to": get_header(headers, "To"),
                 "subject": get_header(headers, "Subject"),
                 "date": get_header(headers, "Date"),
-                "snippet": msg.get("snippet", ""),
-                "body": get_email_body(msg.get("payload", {}), max_body),
-                "labels": label_ids,
+                "snippet": msg.get("snippet", "")[: (150 if is_first_run() else 300)],
                 "category": category,
                 "is_unread": "UNREAD" in label_ids,
-            })
+            }
+            if not is_first_run():
+                entry["thread_id"] = msg.get("threadId", "")
+                entry["to"] = get_header(headers, "To")
+                entry["body"] = get_email_body(msg.get("payload", {}), max_body)
+                entry["labels"] = label_ids
+            emails.append(entry)
         except Exception as e:
             print(f"WARNING: Failed to fetch message {msg_ref['id']}: {e}", file=sys.stderr)
             continue
