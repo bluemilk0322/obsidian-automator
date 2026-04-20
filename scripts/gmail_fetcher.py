@@ -23,6 +23,13 @@ from google_auth import get_credentials, interactive_auth
 
 
 OUTPUT_PATH = "/tmp/emails.json"
+LABELS_OUTPUT_PATH = "/tmp/gmail-labels.json"
+
+# Gmail system labels to exclude from "user labels" snapshot
+SYSTEM_LABEL_NAMES = {
+    "INBOX", "SPAM", "TRASH", "UNREAD", "STARRED",
+    "IMPORTANT", "SENT", "DRAFT", "CHAT",
+}
 
 # Mode-dependent settings (resolved at runtime via FIRST_RUN env var)
 DAILY_MAX_EMAILS = 50
@@ -137,6 +144,36 @@ def fetch_emails(account_name: str) -> list[dict]:
     return emails
 
 
+def fetch_labels(account_name: str) -> list[str]:
+    """Fetch user-defined Gmail labels for one account.
+
+    Returns the sorted list of label names visible to the user,
+    excluding Gmail system labels (INBOX, SPAM, CATEGORY_*, etc.).
+    """
+    try:
+        creds = get_credentials(account_name)
+    except (FileNotFoundError, RuntimeError) as e:
+        print(f"WARNING: {e}", file=sys.stderr)
+        return []
+
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        result = service.users().labels().list(userId="me").execute()
+    except Exception as e:
+        print(f"WARNING: Failed to list labels for {account_name}: {e}", file=sys.stderr)
+        return []
+
+    names = []
+    for label in result.get("labels", []):
+        name = label.get("name", "")
+        if not name or name in SYSTEM_LABEL_NAMES or name.startswith("CATEGORY_"):
+            continue
+        names.append(name)
+
+    return sorted(names)
+
+
 def main():
     # Handle --auth mode
     if len(sys.argv) == 3 and sys.argv[1] == "--auth":
@@ -178,6 +215,24 @@ def main():
         json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"Wrote {len(all_emails)} emails to {OUTPUT_PATH} (mode={output['mode']})", file=sys.stderr)
+
+    # Snapshot user's existing Gmail labels per account so Claude can classify
+    # using the user's own taxonomy (instead of a fixed auto/* set).
+    accounts_labels: dict[str, list[str]] = {}
+    if personal:
+        accounts_labels["personal"] = fetch_labels("personal")
+    if workspace:
+        accounts_labels["workspace"] = fetch_labels("workspace")
+
+    labels_output = {
+        "fetched_at": datetime.now().isoformat(),
+        "accounts": accounts_labels,
+    }
+    with open(LABELS_OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(labels_output, f, ensure_ascii=False, indent=2)
+
+    total_labels = sum(len(v) for v in accounts_labels.values())
+    print(f"Wrote {total_labels} labels to {LABELS_OUTPUT_PATH}", file=sys.stderr)
 
 
 if __name__ == "__main__":

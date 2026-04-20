@@ -7,8 +7,9 @@
 - `/tmp/weather.json` — 天氣資料
 - `/tmp/calendar.json` — 今日行程
 - `/tmp/emails.json` — 信件資料（first_run 時為過去 14 天，否則為 24h 未讀）
+- `/tmp/gmail-labels.json` — 使用者在 Gmail 裡自己建立的標籤清單，按帳號分組
 
-讀取後記住 `first_run` 的值，後面步驟需要用到。
+讀取後記住 `first_run` 的值，以及每個帳號的**既有標籤清單**，後面步驟需要用到。
 
 ## 步驟 2：抓取 AI 資訊源
 
@@ -134,10 +135,25 @@ Email 區塊（從 emails.json 取值）：
 - [ ] [{account}] {sender}：{主旨}
 ```
 
-Email 分類規則：
-- 需要處理：需要回覆、有 deadline、會議邀請、重要通知
-- 供參考：週報、更新通知、FYI 類型
-- 已自動歸檔：促銷、電子報、自動通知、社群媒體通知
+Email 分類規則（**使用者自己的標籤系統**）：
+
+Daily note 上的 🔴 需要處理 / 🟡 供參考 / 🟢 已自動歸檔 三個子區塊仍依「需要的動作」分組（見下方「動作判斷」），但**Gmail 標籤用使用者自己的標籤命名**：
+
+**動作判斷（決定放進哪個子區塊，以及 `archive` 是否為 true）：**
+- 需要處理：需要回覆、有 deadline、會議邀請、重要通知 → `archive: false`
+- 供參考：週報、更新通知、FYI 類型 → `archive: false`
+- 已自動歸檔：促銷、電子報、自動通知、社群媒體通知 → `archive: true`
+
+**標籤選擇（`add_labels` 陣列）：**
+1. 優先從 `/tmp/gmail-labels.json` 中對應帳號的 **既有標籤**選一個最貼切的（例如已有「工作」、「家人」、「帳單」就直接用）
+2. 如果真的沒有任何既有標籤貼切，**可以新建一個標籤**，命名原則：
+   - 用繁體中文、言簡意賅（2-4 字）
+   - 用主題/類別命名（例如「帳單」、「電子報」、「社群」、「訂單通知」、「履歷通知」），**不要**用 `auto/` 前綴或語意模糊的名稱
+   - 新建標籤若有階層關係可用斜線（例如「工作/Slack」）
+3. 同一封信可貼多個標籤（例如「工作」+「重要」）
+4. **不要**套用 Gmail 系統標籤（`INBOX`, `UNREAD`, `SPAM`, `CATEGORY_*` 等）或帶 `auto/` 前綴的標籤
+
+`gmail_labeler.py` 會自動建立任何尚未存在的標籤，你不需要特別聲明。
 
 完整的 Daily Note 結構：
 
@@ -183,14 +199,17 @@ tags:
     {
       "account": "personal 或 workspace",
       "message_id": "從 emails.json 中取得的 id",
-      "add_labels": ["auto/重要" 或 "auto/參考" 或 "auto/通知"],
-      "archive": true（僅對 auto/通知 類別為 true）
+      "add_labels": ["使用者既有標籤", "新建標籤（繁中、主題命名）"],
+      "archive": true（通知/促銷類為 true，其餘為 false）
     }
   ]
 }
 ```
 
-每封 email 都必須有一個 action。account 和 message_id 直接從 emails.json 複製。
+- 每封 email 都必須有一個 action
+- `account` 和 `message_id` 直接從 emails.json 複製
+- `add_labels` 至少放一個標籤；優先使用 `/tmp/gmail-labels.json` 中對應帳號的既有標籤
+- `archive` 值依「動作判斷」決定（通知/促銷類為 true）
 
 ## 重要規則
 

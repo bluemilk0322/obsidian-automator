@@ -20,9 +20,6 @@ from google_auth import get_credentials
 
 INPUT_PATH = "/tmp/email-labels.json"
 
-# Labels to auto-create if they don't exist
-AUTO_LABELS = ["auto/重要", "auto/參考", "auto/通知"]
-
 
 def ensure_labels_exist(service, labels: list[str]) -> dict[str, str]:
     """Create labels if they don't exist. Returns {label_name: label_id}."""
@@ -61,8 +58,15 @@ def apply_labels(account_name: str, actions: list[dict]) -> None:
 
     service = build("gmail", "v1", credentials=creds)
 
-    # Ensure all auto labels exist
-    label_ids = ensure_labels_exist(service, AUTO_LABELS)
+    # Collect every label name Claude asked for in this account's actions;
+    # create any that don't already exist in the user's Gmail.
+    requested: set[str] = set()
+    for action in actions:
+        for name in action.get("add_labels", []):
+            if name:
+                requested.add(name)
+
+    label_ids = ensure_labels_exist(service, sorted(requested))
 
     for action in actions:
         msg_id = action["message_id"]
