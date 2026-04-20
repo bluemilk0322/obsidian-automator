@@ -74,9 +74,15 @@ def get_credentials(account_name: str) -> Credentials:
 
 
 def interactive_auth(account_name: str) -> None:
-    """Run interactive OAuth2 consent flow (requires browser).
+    """Run interactive OAuth2 consent flow.
 
-    Must be run on host machine, not inside Docker.
+    By default this runs on the host (random port, opens local browser).
+    Override via env vars when running inside Docker / WSL where the host
+    browser must reach the callback server through a forwarded port:
+
+        OAUTH_PORT=8080            # fixed port (matches docker -p 8080:8080)
+        OAUTH_BIND=0.0.0.0         # bind to all interfaces (in container)
+        OAUTH_OPEN_BROWSER=0       # do not try to launch a browser; print URL instead
     """
     if not CLIENT_SECRETS_FILE.exists():
         print(f"ERROR: {CLIENT_SECRETS_FILE} not found.")
@@ -86,7 +92,16 @@ def interactive_auth(account_name: str) -> None:
     flow = InstalledAppFlow.from_client_secrets_file(
         str(CLIENT_SECRETS_FILE), SCOPES
     )
-    creds = flow.run_local_server(port=0)
+
+    port = int(os.environ.get("OAUTH_PORT", "0"))
+    bind_addr = os.environ.get("OAUTH_BIND", "")
+    open_browser = os.environ.get("OAUTH_OPEN_BROWSER", "1") == "1"
+
+    kwargs: dict = {"port": port, "open_browser": open_browser}
+    if bind_addr:
+        kwargs["bind_addr"] = bind_addr
+
+    creds = flow.run_local_server(**kwargs)
 
     token_path = get_token_path(account_name)
     token_path.write_text(creds.to_json())
