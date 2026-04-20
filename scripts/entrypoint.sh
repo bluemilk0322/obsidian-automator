@@ -79,10 +79,18 @@ log "Step 4: Running Claude Code CLI..."
 PROMPT=$(cat "${SCRIPTS_DIR}/prompts/daily.md")
 
 run_claude() {
+    # First-run needs many more turns: classifying up to 1000 emails plus
+    # writing Daily + AI-Digest + email-labels.json easily exceeds the
+    # daily-mode budget.
+    if [ "${FIRST_RUN:-0}" = "1" ]; then
+        MAX_TURNS=80
+    else
+        MAX_TURNS=20
+    fi
     claude --print "$PROMPT" \
         --allowedTools "Read,Write,Edit,WebFetch,Bash" \
         --model claude-sonnet-4-6 \
-        --max-turns 15 \
+        --max-turns "$MAX_TURNS" \
         2>>"$LOG"
 }
 
