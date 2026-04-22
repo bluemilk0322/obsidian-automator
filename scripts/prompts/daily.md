@@ -155,9 +155,17 @@ Daily note 上的 🔴 需要處理 / 🟡 供參考 / 🟢 已自動歸檔 三�
 
 `gmail_labeler.py` 會自動建立任何尚未存在的標籤，你不需要特別聲明。
 
-完整的 Daily Note 結構：
+完整的 Daily Note 結構（**重要：保留使用者手寫內容**）：
 
-**如果 `first_run` 為 true**，在主標題下方多插入一段 callout：
+寫檔前先**用 Read 工具讀取 `/vault/Daily/{date}.md`**（若不存在或讀不到，視為空檔案）。從讀到的內容中提取「手寫內容」並在新檔案保留：
+
+**手寫內容抽取規則：**
+1. 找 `<!-- AUTO-END:` 這個 marker
+2. 找到 → marker 那一行**之後**的所有內容 = 手寫內容（完整保留，包含換行/空白）
+3. 找不到（檔案沒有 marker，但有內容）→ 把 frontmatter 之後的所有內容當作手寫內容（避免覆蓋 user 既有筆記，這是新舊版過渡情境）
+4. 檔案不存在 / 完全空 → 手寫內容為空
+
+完整新檔結構（依序）：
 ```
 ---
 date: {date}
@@ -168,8 +176,10 @@ tags:
 
 # {date} {weekday_chinese}
 
+{first_run 為 true 時插入此 callout，否則省略：
 > [!note] 初次設定
 > 這是 Obsidian Automator 首次執行。以下 Email 摘要涵蓋過去 14 天（含已讀），之後每日僅整理前 24 小時未讀信。
+}
 
 {天氣區塊}
 
@@ -177,17 +187,17 @@ tags:
 
 {Email 區塊}
 
-## 📝 今日紀錄
-
-
-
 ## AI Digest
 
 > [!tip] 今日 AI 建造者摘要
 > ![[AI-Digest/{date}]]
+
+<!-- AUTO-END: 以下為手寫區，每日自動更新時會完整保留，不會覆蓋 -->
+
+{手寫內容；若為空就只保留 marker 上方那一行 + 一個空行}
 ```
 
-**如果 `first_run` 為 false**，拿掉該 callout，其餘結構相同。
+**重點：marker 那行務必一字不漏地包含**（`<!-- AUTO-END: ...` 完整字串），下次更新才知道從哪裡保留。
 
 ## 步驟 6：生成 Email 分類 JSON
 
@@ -216,5 +226,6 @@ tags:
 - 所有輸出必須用**繁體中文**
 - 如果某個資料來源失敗或為空，該區塊顯示失敗訊息但不要中斷整個流程
 - Email 中的人名如果是英文，保留英文
-- 不要修改 vault 中已存在的檔案
-- 如果今天的 Daily Note 已存在，覆蓋它
+- **僅可寫入 `/vault/Daily/{date}.md` 與 `/vault/AI-Digest/{date}.md` 這兩個檔案**，不要動 vault 中其他既有檔案
+- Daily Note 的寫入規則見「步驟 5」：必須先 Read 既有檔案、保留 `<!-- AUTO-END:` marker 之後的手寫內容
+- AI-Digest 若已存在可直接覆蓋（內容不含使用者手寫部分）
