@@ -25,6 +25,13 @@ from google_auth import get_credentials, interactive_auth
 OUTPUT_PATH = "/tmp/emails.json"
 LABELS_OUTPUT_PATH = "/tmp/gmail-labels.json"
 
+# 授權失效（refresh token 過期／被撤銷）的帳號 → {account: 錯誤訊息}。
+# 跟「今天真的沒有未讀信」分開記，entrypoint 與 daily note 才看得出差別；
+# 2026-04-27 起 token 失效，daily note 連續半年顯示「（無）」都沒人發現，就是沒分開的後果。
+AUTH_FAILED: dict[str, str] = {}
+# 本程序結束碼：授權失效時用 3，entrypoint 據此印出重新授權的指令。
+EXIT_AUTH_FAILED = 3
+
 # Gmail system labels to exclude from "user labels" snapshot
 SYSTEM_LABEL_NAMES = {
     "INBOX", "SPAM", "TRASH", "UNREAD", "STARRED",
@@ -86,6 +93,7 @@ def fetch_emails(account_name: str) -> list[dict]:
         creds = get_credentials(account_name)
     except (FileNotFoundError, RuntimeError) as e:
         print(f"WARNING: {e}", file=sys.stderr)
+        AUTH_FAILED[account_name] = str(e)
         return []
 
     service = build("gmail", "v1", credentials=creds)
@@ -159,6 +167,7 @@ def fetch_labels(account_name: str) -> list[str]:
         creds = get_credentials(account_name)
     except (FileNotFoundError, RuntimeError) as e:
         print(f"WARNING: {e}", file=sys.stderr)
+        AUTH_FAILED.setdefault(account_name, str(e))
         return []
 
     service = build("gmail", "v1", credentials=creds)
@@ -214,6 +223,10 @@ def main():
         "total": len(all_emails),
         "emails": all_emails,
         "errors": errors,
+        # 帳號代號 → 信箱，daily note 的授權失效警告要寫出是哪個信箱
+        "accounts": {k: v for k, v in (("personal", personal), ("workspace", workspace)) if v},
+        # 授權失效的帳號；空物件＝授權正常（零封信就是真的零封）
+        "auth_failed": AUTH_FAILED,
     }
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
@@ -238,6 +251,12 @@ def main():
 
     total_labels = sum(len(v) for v in accounts_labels.values())
     print(f"Wrote {total_labels} labels to {LABELS_OUTPUT_PATH}", file=sys.stderr)
+
+    # 兩個 JSON 都寫完才回報授權失效，讓後面的步驟仍有檔可讀
+    if AUTH_FAILED:
+        for account, msg in AUTH_FAILED.items():
+            print(f"AUTH FAILURE [{account}]: {msg}", file=sys.stderr)
+        sys.exit(EXIT_AUTH_FAILED)
 
 
 if __name__ == "__main__":

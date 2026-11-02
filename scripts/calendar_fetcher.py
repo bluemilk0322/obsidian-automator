@@ -21,6 +21,10 @@ from google_auth import get_credentials
 OUTPUT_PATH = "/tmp/calendar.json"
 TIMEZONE = "Asia/Taipei"
 
+# 授權失效的帳號 → 錯誤訊息（與 gmail_fetcher 同一套約定，結束碼 3）
+AUTH_FAILED: dict[str, str] = {}
+EXIT_AUTH_FAILED = 3
+
 
 def fetch_events(account_name: str) -> list[dict]:
     """Fetch today's events for one account from all visible calendars."""
@@ -28,6 +32,7 @@ def fetch_events(account_name: str) -> list[dict]:
         creds = get_credentials(account_name)
     except (FileNotFoundError, RuntimeError) as e:
         print(f"WARNING: {e}", file=sys.stderr)
+        AUTH_FAILED[account_name] = str(e)
         return []
 
     service = build("calendar", "v3", credentials=creds)
@@ -107,6 +112,8 @@ def main():
             print(f"Fetching calendar for {account_name} ({email})...", file=sys.stderr)
             result = fetch_events(account_name)
             all_events.extend(result)
+            if account_name in AUTH_FAILED:
+                errors.append(f"Auth failed for {account_name} ({email}): {AUTH_FAILED[account_name]}")
 
     # Sort all events by start time
     all_events.sort(key=lambda e: e.get("start", ""))
@@ -117,12 +124,18 @@ def main():
         "total": len(all_events),
         "events": all_events,
         "errors": errors,
+        "auth_failed": AUTH_FAILED,
     }
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"Wrote {len(all_events)} events to {OUTPUT_PATH}", file=sys.stderr)
+
+    if AUTH_FAILED:
+        for account, msg in AUTH_FAILED.items():
+            print(f"AUTH FAILURE [{account}]: {msg}", file=sys.stderr)
+        sys.exit(EXIT_AUTH_FAILED)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@
 set -uo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+# cron 不帶 TZ，/app/.env 要到下面才 source；先定 TZ，否則 05:00 跑的 DATE 會算成 UTC 的前一天
+export TZ="${TZ:-Asia/Taipei}"
 DATE=$(date +%Y-%m-%d)
 LOG="/tmp/automator-${DATE}.log"
 CREDENTIALS_DIR="${CREDENTIALS_DIR:-/credentials}"
@@ -46,23 +48,36 @@ EOF
 # Track per-step success so we know whether to write .initialized at the end
 PIPELINE_OK=1
 
+# 重新授權 Google 的指令（fetcher 結束碼 3 ＝ refresh token 過期或被撤銷）
+REAUTH_CMD='cd ~/Code/obsidian/obsidian-automator && docker compose run --rm -p 8765:8765 -e OAUTH_PORT=8765 -e OAUTH_BIND=0.0.0.0 -e OAUTH_OPEN_BROWSER=0 automator python3 /app/scripts/google_auth.py --auth personal'
+
 # Step 1: Fetch emails
 log "Step 1: Fetching emails..."
-if python3 "${SCRIPTS_DIR}/gmail_fetcher.py" 2>>"$LOG"; then
+python3 "${SCRIPTS_DIR}/gmail_fetcher.py" 2>>"$LOG"
+RC=$?
+if [ "$RC" -eq 0 ]; then
     log "  ✓ Emails fetched"
+elif [ "$RC" -eq 3 ]; then
+    log "  ✗ Gmail 授權失效：refresh token 過期或被撤銷，信件、標籤、自動歸檔全部停擺"
+    log "    重新授權（在桌機 WSL 跑）：$REAUTH_CMD"
+    PIPELINE_OK=0
 else
     log "  ✗ Email fetch failed (continuing without email data)"
-    echo '{"fetched_at":"","total":0,"emails":[],"errors":["fetch failed"]}' > /tmp/emails.json
+    echo '{"fetched_at":"","total":0,"emails":[],"errors":["fetch failed"],"accounts":{},"auth_failed":{}}' > /tmp/emails.json
     PIPELINE_OK=0
 fi
 
 # Step 2: Fetch calendar (not critical for first-run marker — just a daily concern)
 log "Step 2: Fetching calendar..."
-if python3 "${SCRIPTS_DIR}/calendar_fetcher.py" 2>>"$LOG"; then
+python3 "${SCRIPTS_DIR}/calendar_fetcher.py" 2>>"$LOG"
+RC=$?
+if [ "$RC" -eq 0 ]; then
     log "  ✓ Calendar fetched"
+elif [ "$RC" -eq 3 ]; then
+    log "  ✗ 行事曆授權失效（跟 Gmail 同一把 token），重新授權後一起恢復"
 else
     log "  ✗ Calendar fetch failed (continuing without calendar data)"
-    echo '{"fetched_at":"","date":"","total":0,"events":[],"errors":["fetch failed"]}' > /tmp/calendar.json
+    echo '{"fetched_at":"","date":"","total":0,"events":[],"errors":["fetch failed"],"auth_failed":{}}' > /tmp/calendar.json
 fi
 
 # Step 3: Fetch weather (not critical for first-run marker — just a daily concern)

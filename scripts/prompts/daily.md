@@ -102,6 +102,11 @@ tags:
 - 全天事件標註為「全天」而非時間
 - 如果沒有事件：顯示「今天沒有排程的行程」
 - 按時間排序
+- **如果 `calendar.json` 的 `auth_failed` 不是空物件**：不要寫「今天沒有排程的行程」，改寫：
+  ```
+  > [!warning] 行事曆授權失效
+  > Google token 過期或被撤銷，今天抓不到行程。跟 Gmail 用同一把 token，重新授權後一起恢復。
+  ```
 
 Email 區塊（從 emails.json 取值）：
 
@@ -115,6 +120,16 @@ Email 區塊（從 emails.json 取值）：
 ```
 ## 📬 Email 摘要
 ```
+
+**如果 `emails.json` 的 `auth_failed` 不是空物件**（授權失效，不是真的沒信），在 `## 📬 Email 摘要` 標題下第一行放這個 callout，三個子區塊照常輸出但內容寫「（授權失效，未抓取）」，不要寫「（無）」：
+```
+> [!warning] Gmail 授權失效
+> {account}（{emails.json 的 accounts[account]}）的 Google token 過期或被撤銷，信件摘要與自動歸檔從今天起停擺。
+> 修法：在桌機 WSL 跑
+> `cd ~/Code/obsidian/obsidian-automator && docker compose run --rm -p 8765:8765 -e OAUTH_PORT=8765 -e OAUTH_BIND=0.0.0.0 -e OAUTH_OPEN_BROWSER=0 automator python3 /app/scripts/google_auth.py --auth personal`
+```
+
+授權正常時（`auth_failed` 為空物件）才可以寫「（無）」，那代表今天真的沒有未讀信。
 
 接著共用的三個子區塊：
 ```
