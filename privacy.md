@@ -8,7 +8,7 @@ Obsidian Automator 是作者個人使用的自動化工具，用來把自己的 
 
 透過 Google OAuth 取得以下權限：
 
-- Gmail 讀取、標籤、修改（`gmail.readonly`、`gmail.labels`、`gmail.modify`）
+- Gmail 讀取、標籤、修改、篩選器設定（`gmail.readonly`、`gmail.labels`、`gmail.modify`、`gmail.settings.basic`）
 - Google 日曆唯讀（`calendar.readonly`）
 
 每日執行時讀取：

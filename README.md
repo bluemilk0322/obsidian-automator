@@ -29,6 +29,21 @@ Daily note 以 `<!-- AUTO-END: -->` 標記分成自動區與手寫區，每日�
    docker compose run --rm -p 8765:8765 -e OAUTH_PORT=8765 -e OAUTH_BIND=0.0.0.0 -e OAUTH_OPEN_BROWSER=0 automator python3 /app/scripts/google_auth.py --auth personal
    ```
 
+   瀏覽器授權完會跳回 `http://localhost:8765/`。Windows 連不到 WSL 裡的 port 時會看到「無法連上這個網站」，這時把網址列整串複製下來，用 code 直接換 token（容器裡的 callback server 一生只收一個請求，被別的請求碰到就會結束，重跑即可）：
+
+   ```bash
+   docker compose run --rm -T -e AUTH_CODE='<貼上整串 localhost:8765 網址>' automator python3 - <<'PY'
+   import os
+   from urllib.parse import urlparse, parse_qs
+   from google_auth_oauthlib.flow import Flow
+   from google_auth import SCOPES
+   code = parse_qs(urlparse(os.environ["AUTH_CODE"]).query)["code"][0]
+   flow = Flow.from_client_secrets_file("/credentials/credentials.json", scopes=SCOPES, redirect_uri="http://localhost:8765/")
+   flow.fetch_token(code=code)
+   open("/credentials/token_personal.json", "w").write(flow.credentials.to_json())
+   PY
+   ```
+
 5. 啟動：`docker compose build && docker compose up -d`。第一次執行會做 14 天的補抓，之後每天只整理前 24 小時的未讀信。
 
 Claude Code CLI 的登入狀態直接掛主機的 `~/.claude`（唯讀）。
